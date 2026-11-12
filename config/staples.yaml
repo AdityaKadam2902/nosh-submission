@@ -1,0 +1,4 @@
+# Task 2 (M4): assumed available unless the user toggles them off. Shown in every match receipt.
+default: [water, salt, black pepper]
+# pantry extras the UI may offer as toggles (NOT assumed by default)
+optional: [vegetable oil, olive oil, sugar, flour, butter, baking powder, baking soda, cooking spray]

@@ -1,0 +1,20 @@
+# secrets
+.env
+# raw data, built DB, vector index (no redistribution license)
+data/
+*.db
+*.db.tmp
+*.sqlite
+*.faiss
+ids.json
+# LLM disk cache
+.cache/
+.llm_cache/
+# python
+__pycache__/
+*.pyc
+.venv/
+venv/
+.pytest_cache/
+*.egg-info/
+.DS_Store

@@ -1,0 +1,149 @@
+# Task 3 (M5) substitution config. EVERY threshold lives here (nothing hard-coded in recipebot/substitute.py).
+# Validate/tune on the full DB: sample.db is a ~16% sample, so cohorts there are ~6x smaller than in production.
+#
+# Pipeline (ARCHITECTURE §9): target -> role entry below -> cohort of similar recipes -> C_with / C_without (contain the
+# target or not) -> for each can_fill candidate: share_without, share_with, lift -> grade (rules below) -> constraints.
+# `can_fill` is the ROLE-COMPATIBILITY gate: only these may ever be proposed; the DATASET decides whether any is supported.
+# A can_fill item may be a list of spellings of ONE candidate (the first is its display name): [breadcrumb, bread crumb].
+
+defaults:
+  similarity_ignore: [salt, water, black pepper, pepper, cooking spray]   # ignored when comparing recipes (+ staples.yaml default)
+  title_stop: [recipe, easy, best, simple, quick, homemade, classic, favorite, perfect, great, my, mom, grandma, grandmother,
+    old, fashioned, style, the, a, an, and, with, for, of, in, to, from, "no", free, ii, iii, super, ultimate, basic, good, fast]
+  dish_classes: [bread, cake, muffin, cookie, brownie, pancake, waffle, pie, tart, scone, biscuit, cupcake, pasta, soup, stew,
+    casserole, salad, sauce, curry, pizza, quiche, custard, pudding, frosting, icing, dip, burger, meatball, chili, risotto,
+    lasagna, noodle, loaf, bar, crepe, dumpling, omelet, omelette, fritter, cobbler, crisp, donut, doughnut, roll]
+  cohort:
+    same_dish_title_frac: 0.6      # same-dish = title shares >= ceil(frac * n_dish_tokens) dish tokens with the source title
+    min_jaccard_same_dish: 0.20    # Jaccard of ingredient canon sets (target, staples, similarity_ignore removed)
+    min_jaccard_same_class: 0.35   # same dish class keyword (bread/cake/pasta...) but a different dish: stricter
+    max_cohort: 500                # keep the most similar N (same-dish first, then Jaccard desc, then id)
+  candidate:
+    min_support: 2                 # recipes in C_without that use the candidate
+    min_lift: 1.5                  # share_without / max(share_with, lift_epsilon)
+    lift_epsilon: 0.05
+  grade:
+    min_without_any: 3             # |C_without| below this -> insufficient (refuse)
+    min_without_direct: 8          # 3 <= |C_without| < 8 -> at best `indirect`
+    min_same_dish_without: 4       # fewer same-dish recipes without the target -> evidence is from related dishes -> `indirect`
+    min_with_for_lift: 3           # |C_with| below this: lift is unreliable -> at best `indirect`
+    tie_rel: 0.20                  # two candidates within 20% (relative) of each other -> `conflicting`
+    strong:   {min_share: 0.25, min_lift: 2.0, min_support: 3, margin_rel: 0.30}   # margin: runner-up share <= leader*(1-margin_rel)
+    moderate: {min_share: 0.15, min_lift: 1.5, min_support: 2}
+    omit:     {min_share: 0.50, max_grade: moderate}   # omission = similar recipes without the target that use NO can_fill item
+  typical_amount_min_n: 3          # report a typical amount only if >= n cohort recipes give a qty in the same unit
+  support_ids: 5                   # supporting recipe ids listed per candidate (most similar first)
+
+# key = normalized target name (aliases: other spellings of the same ingredient). A target containing a key (e.g. "heavy cream"
+# -> cream, "egg white" -> egg) uses that key's entry. Unknown target -> `insufficient` (roles are never guessed by the LLM).
+ingredients:
+  egg:
+    roles: [binder, moisture, leavening, richness]
+    omit_ok: true
+    can_fill: [applesauce, banana, yogurt, buttermilk, sour cream, mayonnaise, tofu, flaxseed, chia seed, cornstarch, baking powder,
+      baking soda, vinegar, milk, vegetable oil, pumpkin, condensed milk, cream cheese, avocado, egg substitute, egg replacer, aquafaba]
+  butter:
+    roles: [fat, flavor, tenderness, moisture]
+    omit_ok: false
+    can_fill: [margarine, shortening, vegetable oil, olive oil, canola oil, coconut oil, applesauce, yogurt, sour cream, cream cheese,
+      lard, ghee, mayonnaise, banana, avocado, buttermilk, milk]
+  milk:
+    roles: [liquid, moisture, richness]
+    omit_ok: false
+    can_fill: [soy milk, almond milk, oat milk, coconut milk, rice milk, cashew milk, water, evaporated milk, half and half, heavy cream,
+      buttermilk, yogurt, milk powder, condensed milk, orange juice]
+  cream:
+    roles: [fat, liquid, richness, thickener]
+    omit_ok: true
+    can_fill: [milk, half and half, evaporated milk, coconut milk, coconut cream, soy milk, almond milk, oat milk, yogurt, sour cream,
+      cream cheese, mascarpone, tofu, cornstarch, butter, olive oil, chicken broth, vegetable broth, cream of mushroom soup, cashew]
+  flour:
+    roles: [structure, thickener, binder]
+    omit_ok: false
+    can_fill: [wheat flour, almond flour, oat flour, rice flour, coconut flour, cornstarch, cornmeal, potato starch, tapioca,
+      semolina, chickpea flour, gluten free flour, oat, [breadcrumb, bread crumb]]
+  sugar:
+    roles: [sweetener, moisture, browning, tenderness]
+    omit_ok: false
+    can_fill: [honey, maple syrup, brown sugar, powdered sugar, agave, molasses, stevia, applesauce, banana, date, corn syrup]
+  brown sugar:
+    roles: [sweetener, moisture, flavor]
+    omit_ok: false
+    can_fill: [sugar, honey, maple syrup, molasses, coconut sugar, agave]
+  oil:
+    roles: [fat, moisture]
+    omit_ok: false
+    can_fill: [butter, margarine, applesauce, yogurt, banana, mayonnaise, shortening, olive oil, coconut oil, canola oil, vegetable oil, ghee]
+  honey:
+    roles: [sweetener, moisture, binder]
+    omit_ok: false
+    can_fill: [maple syrup, sugar, brown sugar, agave, molasses, corn syrup]
+  yogurt:
+    roles: [moisture, tang, richness, thickener]
+    omit_ok: true
+    can_fill: [sour cream, buttermilk, milk, mayonnaise, cream cheese, coconut milk, applesauce, tofu, cottage cheese, lemon juice]
+  cheese:
+    roles: [flavor, fat, binder, salt]
+    omit_ok: true
+    can_fill: [nutritional yeast, tofu, cashew, avocado, hummus, mayonnaise, olive oil, butter, egg]
+  sour cream:
+    roles: [moisture, tang, richness]
+    omit_ok: true
+    can_fill: [yogurt, buttermilk, cream cheese, mayonnaise, milk, heavy cream, cottage cheese, mascarpone, tofu, lemon juice]
+  buttermilk:
+    roles: [moisture, tang, leavening activation, tenderness]
+    omit_ok: false
+    can_fill: [milk, yogurt, sour cream, lemon juice, vinegar, cream of tartar]
+  baking powder:
+    roles: [leavening]
+    omit_ok: false
+    can_fill: [baking soda, cream of tartar, vinegar, lemon juice, buttermilk, yogurt, self rising flour, yeast]
+  baking soda:
+    roles: [leavening, browning, tenderness]
+    omit_ok: false
+    can_fill: [baking powder, self rising flour, yeast]
+  breadcrumb:
+    aliases: [bread crumb]
+    roles: [binder, coating, bulk]
+    omit_ok: true
+    can_fill: [panko, cracker crumb, oat, cornflake, cornmeal, flour, crouton, almond flour, parmesan cheese, potato chip, pretzel]
+  cream cheese:
+    roles: [fat, tang, binder, thickener]
+    omit_ok: true
+    can_fill: [mascarpone, ricotta, cottage cheese, yogurt, sour cream, butter, tofu, cashew, margarine]
+  mayonnaise:
+    roles: [fat, emulsifier, binder, moisture]
+    omit_ok: true
+    can_fill: [yogurt, sour cream, avocado, cream cheese, olive oil, mustard, hummus, tofu]
+  cornstarch:
+    roles: [thickener]
+    omit_ok: false
+    can_fill: [flour, arrowroot, potato starch, tapioca, rice flour]
+  lemon juice:
+    roles: [acid, flavor]
+    omit_ok: true
+    can_fill: [lime juice, vinegar, orange juice, wine, lemon zest, cream of tartar]
+  chicken broth:
+    roles: [liquid, flavor, salt]
+    omit_ok: false
+    can_fill: [vegetable broth, beef broth, water, wine, bouillon]
+  soy sauce:
+    roles: [salt, umami, color]
+    omit_ok: false
+    can_fill: [tamari, worcestershire sauce, coconut amino, fish sauce, salt, miso, teriyaki sauce]
+  wine:
+    roles: [acid, liquid, flavor]
+    omit_ok: true
+    can_fill: [chicken broth, vegetable broth, vinegar, grape juice, apple juice, lemon juice, water]
+  vinegar:
+    roles: [acid, flavor]
+    omit_ok: false
+    can_fill: [lemon juice, lime juice, wine]
+  maple syrup:
+    roles: [sweetener, flavor, moisture]
+    omit_ok: false
+    can_fill: [honey, brown sugar, sugar, agave, molasses, corn syrup]
+  shortening:
+    roles: [fat, tenderness, flakiness]
+    omit_ok: false
+    can_fill: [butter, margarine, lard, vegetable oil, coconut oil, ghee]

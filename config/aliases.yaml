@@ -1,0 +1,98 @@
+# Keys/values are token sequences (singularized, lowercase). Three stages:
+#  pre_aliases   - BEFORE prep/soft words are dropped (protect or rewrite phrases that contain them)
+#  aliases       - AFTER drops, replaces the sequence anywhere in the canon
+#  exact_aliases - only when the WHOLE canon equals the key
+pre_aliases:
+  half and half: half_and_half
+  crushed red pepper flake: red pepper flake
+  crushed red pepper: red pepper flake
+  dry mustard: mustard powder
+  active dry yeast: yeast
+  dry yeast: yeast
+  instant yeast: yeast
+  rapid rise yeast: yeast
+  hot water: water
+  hot tap water: water
+  ice cold water: water
+aliases:
+  scallion: green onion
+  spring onion: green onion
+  aubergine: eggplant
+  courgette: zucchini
+  capsicum: bell pepper
+  rocket: arugula
+  coriander leaf: cilantro
+  cilantro leaf: cilantro
+  chinese parsley: cilantro
+  flat leaf parsley: parsley
+  italian flat leaf parsley: parsley
+  italian parsley: parsley
+  flat parsley: parsley
+  garbanzo bean: chickpea
+  garbanzo: chickpea
+  chick pea: chickpea
+  prawn: shrimp
+  all purpose flour: flour
+  ap flour: flour
+  bicarbonate of soda: baking soda
+  sodium bicarbonate: baking soda
+  double cream: heavy cream
+  heavy whipping cream: heavy cream
+  whipping cream: heavy cream
+  single cream: light cream
+  caster sugar: sugar
+  superfine sugar: sugar
+  granulated sugar: sugar
+  white sugar: sugar
+  icing sugar: powdered sugar
+  confectioner sugar: powdered sugar
+  light brown sugar: brown sugar
+  dark brown sugar: brown sugar
+  kosher salt: salt
+  sea salt: salt
+  table salt: salt
+  coarse salt: salt
+  fine salt: salt
+  flaky salt: salt
+  iodized salt: salt
+  yellow onion: onion
+  white onion: onion
+  sweet onion: onion
+  spanish onion: onion
+  garlic clove: garlic
+  chicken stock: chicken broth
+  beef stock: beef broth
+  vegetable stock: vegetable broth
+  cornflour: cornstarch
+  corn starch: cornstarch
+  mayo: mayonnaise
+  soya sauce: soy sauce
+  rapeseed oil: canola oil
+  evoo: olive oil
+  plum tomato: tomato
+  roma tomato: tomato
+  stewed tomato: tomato
+  semisweet chocolate chip: chocolate chip
+  semi sweet chocolate chip: chocolate chip
+  cinnamon stick: cinnamon
+  hot water: water
+  ice cube: ice
+  parmigiano reggiano: parmesan cheese
+  yoghurt: yogurt
+  vanilla essence: vanilla extract
+  lemon rind: lemon zest
+  lime rind: lime zest
+  orange rind: orange zest
+  beef mince: beef
+exact_aliases:
+  pepper: black pepper
+  vanilla: vanilla extract
+  parmesan: parmesan cheese
+  cheddar: cheddar cheese
+  mozzarella: mozzarella cheese
+# one line that really lists two items -> two ingredient rows (qty/unit dropped)
+split_aliases:
+  salt and black pepper: [salt, black pepper]
+  salt and pepper: [salt, black pepper]
+  pepper and salt: [salt, black pepper]
+  salt and white pepper: [salt, white pepper]

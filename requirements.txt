@@ -1,0 +1,9 @@
+# Core (Python 3.11)
+requests>=2.31
+python-dotenv>=1.0
+pyyaml>=6.0
+pydantic>=2.6
+google-genai>=1.0
+streamlit>=1.35
+pytest>=8.0
+# Optional vector index (M2+): pip install -r requirements-embed.txt  (or: make embed)

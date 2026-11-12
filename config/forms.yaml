@@ -1,0 +1,68 @@
+# canon_forms: kept IN the canon name (garlic powder != garlic) and recorded in `forms`.
+canon_forms: [powder, paste, sauce, juice, oil, extract, flake, smoked, dried, zest, syrup, puree]
+# soft_forms: recorded in `forms` but DROPPED from canon ("ground cinnamon" -> cinnamon, forms=[ground]).
+# Deviation from ARCHITECTURE §3 (which lists ground/canned as canon forms): avoids splitting top_ingredients and
+# T2 matching into cinnamon / ground cinnamon. Move a word between the lists to change behaviour.
+soft_forms: [ground, canned, frozen, fresh, crushed, whole, raw, cooked, ripe]
+# prep_words: dropped (not recorded). Never put an allergen/ingredient word here.
+prep_words: [chopped, minced, diced, sliced, peeled, seeded, halved, half, quartered, grated, shredded, melted, softened,
+  beaten, divided, optional, finely, freshly, thinly, roughly, coarsely, lightly, cubed, trimmed, rinsed, drained,
+  thawed, uncooked, boneless, skinless, lean, unsalted, salted, unsweetened, sweetened, packed, firmly, mashed,
+  crumbled, toasted, chilled, cold, warm, lukewarm, boiling, stale, sifted, pitted, stemmed, cored, deveined, shelled,
+  husked, zested, juiced, squeezed, washed, cleaned, large, small, medium, jumbo, big, heaping, scant, level, rounded,
+  about, approximately, pure, organic, homemade, plain, dry, skim, nonfat, lowfat, piece, chunk, wedge, slice, strip,
+  cube, sprig, stalk, head, more, extra, virgin, quality, bite, sized, size, divided, room, temperature, finely,
+  cut, into, inch, square, unbleached, bleached, fine, coarse, uncut, hulled, scrubbed, rolled, instant, lowsodium]
+# multi-word descriptors dropped as phrases (tokens are singularized)
+drop_phrases:
+  - [low, fat]
+  - [reduced, fat]
+  - [fat, free]
+  - [non, fat]
+  - [low, sodium]
+  - [reduced, sodium]
+  - ["no", salt, added]
+  - [day, old]
+  - [good, quality]
+  - [store, bought]
+  - [ready, to, use]
+# stopwords trimmed from both ends of a canon
+edge_words: [of, the, a, an, and, with, in, for, to, from, on, or]
+# "olive or vegetable oil" -> canon "olive oil", alts [vegetable oil] when the right side ends in one of these
+shared_heads: [broth, stock, oil, sauce, juice, vinegar, powder, cheese, flour, sugar, pepper, wine, milk, cream, paste, extract, syrup, bean, onion, tomato]
+
+# contains(): a query that EQUALS a key does not match an ingredient whose canon has one of these extra tokens
+# (garlic powder is not garlic). Only extras outside the matched span count. ignore_forms=True disables this.
+distinct_pairs:
+  garlic: [powder, salt, paste, flake, sauce, bread, chive, oil]
+  onion: [powder, salt, flake, soup, green, spring, ring, dip, juice]
+  tomato: [paste, sauce, juice, puree, soup, ketchup, powder, salsa, dried, sun]
+  peanut: [oil, butter, flour]
+  butter: [peanut, almond, cashew, apple, cocoa, nut, sunflower, shea, pumpkin, sesame, bean, lettuce, extract, flavoring]
+  milk: [coconut, almond, soy, oat, rice, cashew, hemp, chocolate]
+  egg: [noodle, roll, wrapper, replacer, substitute, free]
+  cream: [cheese, sour, ice, of, coconut, tartar, soda, puff]
+  cheese: [cracker, cake]
+  coconut: [milk, cream, oil, water, flour, aminos]
+  almond: [milk, butter, extract, flour, paste, oil]
+  sugar: [snap, substitute]
+  lemon: [pepper, curd, extract]
+  lime: [pepper, curd, extract]
+  wine: [vinegar]
+  rice: [vinegar, wine, noodle, flour, paper, milk, cake, syrup, cracker, cereal]
+  bean: [sprout, paste, curd, thread]
+  chicken: [broth, stock, bouillon, soup, seasoning, base]
+  beef: [broth, stock, bouillon, soup, seasoning, base]
+  pork: [rind]
+  turkey: [broth, stock, bouillon, seasoning]
+  oyster: [sauce, mushroom]
+  fish: [sauce]
+  soy: [sauce, milk, yogurt]
+  flour: [tortilla]
+  corn: [syrup, oil, tortilla, chip, flake, starch, flour, meal, bread, muffin]
+  potato: [sweet, chip, starch, flour, flake]
+  apple: [juice, cider, butter, sauce, vinegar, pie]
+  pumpkin: [seed, spice, pie]
+  olive: [oil]
+  mustard: [powder, seed, green, oil]
+  ginger: [ale, beer, snap, powder]

@@ -1,0 +1,93 @@
+# Terms are token sequences (tokenized + singularized + aliased by normalize.term_tokens; no prep-word dropping).
+# definite     -> state "contains"
+# may_contain  -> state "possible" (excluded from the main list, shown under "Uncertain")
+# exceptions   -> a hit is cancelled when an exception phrase COVERS the matched span
+#                 (e.g. "coconut milk" covers "milk"); a longer may_contain phrase downgrades a covered definite hit
+#                 to "possible" (e.g. "peanut oil" covers "peanut").
+# global_exceptions -> phrase anywhere in the ingredient clears this restriction for that ingredient.
+# Alternatives ("butter or margarine"): a hit only in an alternative is reported as "possible".
+restriction_aliases:
+  lactose: dairy
+  milk: dairy
+  eggs: egg
+  peanuts: peanut
+  tree_nuts: tree_nut
+  nuts: [tree_nut, peanut]
+  nut: [tree_nut, peanut]
+  wheat: gluten
+  celiac: gluten
+  crustacean: shellfish
+  vegan: [vegetarian, dairy, egg]
+  veg: vegetarian
+restrictions:
+  dairy:
+    definite: [milk, butter, buttermilk, cream, cheese, cheddar, mozzarella, parmesan, ricotta, feta, gouda, brie, mascarpone,
+      provolone, gruyere, romano, pecorino, cheese curd, paneer, yogurt, kefir, ghee, whey, casein, lactose, half and half,
+      sour cream, ice cream, condensed milk, evaporated milk, milk powder, creme fraiche, custard, milk chocolate, queso, halloumi]
+    may_contain: [margarine, chocolate, caramel, natural flavor, creamer, butterscotch, cool whip, whipped topping, nougat, ranch dressing]
+    exceptions: [coconut milk, almond milk, soy milk, oat milk, rice milk, cashew milk, hemp milk, coconut cream, cream of coconut,
+      cream of tartar, cocoa butter, peanut butter, almond butter, cashew butter, nut butter, apple butter, sunflower seed butter,
+      shea butter, butter bean, butter lettuce, coconut yogurt, soy yogurt, almond yogurt, cashew cheese, nut cheese, coconut butter,
+      coconut whipped cream, cream soda]
+    global_exceptions: [dairy free, non dairy, nondairy, vegan]
+  egg:
+    definite: [egg, mayonnaise, eggnog, meringue, hollandaise, albumin, egg white, egg yolk, custard, quiche, frittata, brioche, challah]
+    may_contain: [aioli, marshmallow, cake mix, brownie mix, pancake mix, baking mix, mousse, tartar sauce, caesar dressing, lemon curd, ice cream, fresh pasta]
+    exceptions: [egg replacer, egg substitute, flax egg, chia egg, vegan egg]
+    global_exceptions: [egg free, eggless, vegan]
+  peanut:
+    definite: [peanut, groundnut, arachis, peanut butter, peanut flour]
+    may_contain: [peanut oil, satay, mixed nut, trail mix, nut butter, praline, nougat, granola]
+    exceptions: []
+    global_exceptions: [peanut free, nut free]
+  tree_nut:
+    definite: [almond, walnut, pecan, cashew, pistachio, hazelnut, filbert, macadamia, brazil nut, chestnut, praline, marzipan, nutella,
+      gianduja, nut, almond extract, almond milk, almond flour]
+    may_contain: [pine nut, nut butter, mixed nut, trail mix, amaretto, frangelico, pesto, baklava, granola, nougat]
+    exceptions: [water chestnut]
+    global_exceptions: [nut free, tree nut free]
+    # coconut and nutmeg are deliberately NOT listed (coconut: removed from FDA tree-nut list; nutmeg: a seed spice)
+  gluten:
+    definite: [wheat, flour, barley, rye, semolina, couscous, bulgur, farro, spelt, pasta, spaghetti, penne, macaroni, noodle, lasagna,
+      fettuccine, linguine, orzo, ravioli, tortellini, bread, breadcrumb, panko, cracker, seitan, beer, malt, graham cracker, pita,
+      bagel, bun, crouton, pretzel, biscuit, udon, ramen, gnocchi, flour tortilla, cake flour, bread flour, wonton wrapper]
+    may_contain: [soy sauce, oat, tortilla, teriyaki sauce, worcestershire sauce, beer batter, licorice, malt vinegar, gravy mix, soup mix, bouillon]
+    exceptions: [rice noodle, rice flour, corn tortilla, almond flour, coconut flour, rice paper, buckwheat noodle, glass noodle, bean thread noodle, cornflour,
+      chickpea flour, oat flour, tapioca flour, potato flour, corn flour, root beer, ginger beer, cream of tartar]
+    global_exceptions: [gluten free]
+  shellfish:
+    definite: [shrimp, crab, lobster, crawfish, crayfish, clam, oyster, mussel, scallop, langoustine, krill, abalone, oyster sauce, shrimp paste, clam juice, crab meat]
+    may_contain: [squid, calamari, octopus, snail, escargot, imitation crab, surimi, fish sauce, seafood seasoning, bouillabaisse]
+    exceptions: [oyster mushroom, crab apple, lobster mushroom, scallop squash, scallop pasta]
+    global_exceptions: [shellfish free]
+  soy:
+    definite: [soy, soya, soybean, soy sauce, tofu, tempeh, edamame, miso, tamari, soy milk, soy lecithin, soy protein, natto]
+    may_contain: [vegetable oil, margarine, textured vegetable protein, teriyaki sauce, hoisin sauce, vegetable broth]
+    exceptions: []
+    global_exceptions: [soy free]
+  pork:
+    definite: [pork, bacon, ham, prosciutto, pancetta, lard, salt pork, pork rind, ham hock, guanciale, mortadella, spam, capicola, coppa, speck, carnitas, pulled pork, bacon bit]
+    may_contain: [sausage, chorizo, pepperoni, salami, hot dog, gelatin, bologna, broth, stock, bouillon, marshmallow, jello]
+    exceptions: [turkey bacon, beef bacon, chicken sausage, turkey sausage, turkey ham, beef sausage, beef hot dog, chicken broth, beef broth, vegetable broth, chicken stock, beef stock, vegetable stock, chicken bouillon, beef bouillon, vegetable bouillon, turkey pepperoni, beef pepperoni, turkey salami, beef salami]
+    global_exceptions: [vegetarian, vegan, veggie, meatless, plant based, pork free]
+  beef:
+    definite: [beef, hamburger meat, hamburger patty, sirloin, ribeye, rib eye, brisket, chuck roast, chuck steak, roast beef, veal, oxtail, short rib,
+      corned beef, pastrami, bresaola, suet, tallow, flank steak, skirt steak, filet mignon, ground chuck, ground round]
+    may_contain: [steak, tenderloin, sausage, hot dog, pepperoni, salami, meatball, meatloaf, jerky, liver, gelatin, broth, stock, bouillon, demi glace, marshmallow, jello]
+    exceptions: [steak sauce, steak seasoning, tuna steak, salmon steak, fish steak, swordfish steak, halibut steak, pork steak, chicken broth, pork broth, vegetable broth, chicken stock, vegetable stock, chicken bouillon, vegetable bouillon, turkey sausage, chicken sausage, turkey pepperoni, turkey salami, turkey meatball, chicken meatball, pork tenderloin, turkey tenderloin, chicken tenderloin, pork sausage, pork hot dog, turkey hot dog, chicken hot dog, turkey jerky, chicken liver, pork liver, turkey liver, turkey steak, chicken steak]
+    global_exceptions: [vegetarian, vegan, veggie, meatless, plant based, beef free]
+  alcohol:
+    definite: [wine, beer, vodka, rum, whiskey, whisky, bourbon, brandy, cognac, gin, tequila, liqueur, sake, sherry, champagne, prosecco, port, vermouth, amaretto,
+      kahlua, triple sec, grand marnier, cooking wine, marsala, bitter, hard cider, ale, stout, lager, kirsch, schnapps, mezcal, scotch, madeira, cointreau, curacao, limoncello]
+    may_contain: [vanilla extract, almond extract, rum extract, mirin, lemon extract, orange extract, peppermint extract]
+    exceptions: [wine vinegar, rice wine vinegar, red wine vinegar, white wine vinegar, sherry vinegar, champagne vinegar, root beer, ginger beer, ginger ale, cream sherry vinegar, port salut, sake lees]
+    global_exceptions: [non alcoholic, alcohol free, nonalcoholic]
+  vegetarian:
+    definite: [beef, pork, chicken, turkey, lamb, veal, bacon, ham, sausage, pepperoni, salami, prosciutto, pancetta, chorizo, hot dog, jerky, duck, goose, rabbit, venison, bison,
+      mutton, steak, rib, meat, meatball, meatloaf, ground beef, lard, suet, tallow, gelatin, fish, salmon, tuna, cod, tilapia, halibut, trout, mackerel, herring, catfish, swordfish,
+      snapper, haddock, pollock, eel, sardine, anchovy, caviar, roe, shrimp, prawn, crab, lobster, clam, oyster, mussel, scallop, squid, calamari, octopus, fish sauce, oyster sauce,
+      foie gras, bone broth, liver, oxtail, tripe, tongue, gizzard, hamburger, brisket, sirloin, ribeye, rennet, bacon bit, shrimp paste, crawfish, crayfish, guanciale]
+    may_contain: [broth, stock, bouillon, worcestershire sauce, caesar dressing, marshmallow, jello, parmesan, pecorino, gummy, bone, demi glace, shortening]
+    exceptions: [celery rib, oyster mushroom, crab apple, lobster mushroom, scallop squash, chicken of the woods, hamburger bun, hamburger bread, steak sauce, steak seasoning,
+      fish free, vegetable broth, vegetable stock, vegetable bouillon, mushroom broth, mushroom stock, vegan broth, vegetarian broth, no chicken broth, no beef broth]
+    global_exceptions: [vegetarian, vegan, veggie, meatless, plant based, imitation, faux, mock, meat free]

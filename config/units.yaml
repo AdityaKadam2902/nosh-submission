@@ -1,0 +1,47 @@
+# Units. family: mass (base g) | volume (base ml) | piece (named discrete unit; comparable only with the SAME unit) | length (not comparable).
+# Unitless counts ("2 eggs") are qty with unit NULL = family "count". Aliases are matched case-insensitively after a leading number.
+units:
+  cup:         {family: volume, to_base: 236.588, aliases: [cups, c]}
+  tablespoon:  {family: volume, to_base: 14.7868, aliases: [tablespoons, tbsp, tbsps, tbs, tbl, tbls, tbspn]}
+  teaspoon:    {family: volume, to_base: 4.92892, aliases: [teaspoons, tsp, tsps, tspn]}
+  fluid ounce: {family: volume, to_base: 29.5735, aliases: [fluid ounces, fl oz, floz]}
+  pint:        {family: volume, to_base: 473.176, aliases: [pints, pt]}
+  quart:       {family: volume, to_base: 946.353, aliases: [quarts, qt]}
+  gallon:      {family: volume, to_base: 3785.41, aliases: [gallons, gal]}
+  milliliter:  {family: volume, to_base: 1.0, aliases: [milliliters, millilitre, millilitres, ml, mls]}
+  liter:       {family: volume, to_base: 1000.0, aliases: [liters, litre, litres, l]}
+  ounce:       {family: mass, to_base: 28.3495, aliases: [ounces, oz]}
+  pound:       {family: mass, to_base: 453.592, aliases: [pounds, lb, lbs]}
+  gram:        {family: mass, to_base: 1.0, aliases: [grams, g, gr]}
+  kilogram:    {family: mass, to_base: 1000.0, aliases: [kilograms, kg, kgs]}
+  inch:        {family: length, to_base: 25.4, aliases: [inches, in]}
+  clove:       {family: piece, to_base: 1, aliases: [cloves]}
+  slice:       {family: piece, to_base: 1, aliases: [slices]}
+  can:         {family: piece, to_base: 1, aliases: [cans]}
+  package:     {family: piece, to_base: 1, aliases: [packages, pkg, pkgs]}
+  packet:      {family: piece, to_base: 1, aliases: [packets]}
+  envelope:    {family: piece, to_base: 1, aliases: [envelopes]}
+  stick:       {family: piece, to_base: 1, aliases: [sticks]}
+  pinch:       {family: piece, to_base: 1, aliases: [pinches]}
+  dash:        {family: piece, to_base: 1, aliases: [dashes]}
+  splash:      {family: piece, to_base: 1, aliases: [splashes]}
+  dollop:      {family: piece, to_base: 1, aliases: [dollops]}
+  handful:     {family: piece, to_base: 1, aliases: [handfuls]}
+  bunch:       {family: piece, to_base: 1, aliases: [bunches]}
+  sprig:       {family: piece, to_base: 1, aliases: [sprigs]}
+  head:        {family: piece, to_base: 1, aliases: [heads]}
+  stalk:       {family: piece, to_base: 1, aliases: [stalks]}
+  ear:         {family: piece, to_base: 1, aliases: [ears]}
+  jar:         {family: piece, to_base: 1, aliases: [jars]}
+  bottle:      {family: piece, to_base: 1, aliases: [bottles]}
+  container:   {family: piece, to_base: 1, aliases: [containers]}
+  bag:         {family: piece, to_base: 1, aliases: [bags]}
+  box:         {family: piece, to_base: 1, aliases: [boxes]}
+  carton:      {family: piece, to_base: 1, aliases: [cartons]}
+  sheet:       {family: piece, to_base: 1, aliases: [sheets]}
+  fillet:      {family: piece, to_base: 1, aliases: [fillets, filet, filets]}
+  link:        {family: piece, to_base: 1, aliases: [links]}
+  knob:        {family: piece, to_base: 1, aliases: [knobs]}
+  scoop:       {family: piece, to_base: 1, aliases: [scoops]}
+# words allowed between the quantity and the unit ("1 large clove", "1 heaping teaspoon")
+size_words: [large, small, medium, heaping, heaped, scant, generous, level, rounded, big, jumbo, extra]

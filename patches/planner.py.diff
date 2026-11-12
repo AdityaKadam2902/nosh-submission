@@ -1,0 +1,20 @@
+--- recipebot/planner.py	2026-11-12 09:04:38.259569371 +0000
++++ recipebot/planner.py	2026-11-12 09:04:38.282736324 +0000
+@@ -46,7 +46,7 @@
+ - stats: questions about counts, percentages, most common ingredients, average ingredients, fewest/most steps over the dataset. Set tool_args.stats_op (count|percentage|top_ingredients|ingredient_count_summary|rank_steps) and filters (contains_all, contains_any, exclude, title_contains, source, k, order). Stats ignore conversation state: use only what the user says.
+ - recipe_detail: the user wants to see one recipe ("show the second one", "tell me about that recipe", or an id). Leave tool_args.row/recipe_id empty unless the user gave an explicit number or id.
+ - match: the user lists ingredients they HAVE and wants recipes. Put them in ops (available set/add, one value each, keep quantities like "2 eggs"), plus any limits (max_steps, restrictions, exclude) and ranking wishes in ops (preferences add, e.g. "fewest extra ingredients", "fewest steps", "most matched").
+-- substitute: the user wants a replacement for an ingredient in a recipe. Set tool_args.target (and focus recipe via ops focus_recipe_id only if an id is given).
++- substitute: the user wants a replacement for / to leave out an ingredient in a recipe. Set tool_args.target (the ingredient to replace, one name) and, only if the user gave one, tool_args.recipe_id (an id) or tool_args.row (a number from the last results). Otherwise leave them empty: code uses the focus recipe. Dietary needs go in ops restrictions add, as always. You never suggest replacements yourself.
+ - chat: greetings/thanks. out_of_scope: anything unrelated to recipes in this dataset.
+ 
+ OPS = {field, op, value|values}. fields: dish_query, include, exclude, restrictions, max_steps, available, preferences, focus_recipe_id. op: set|add|remove|clear.
+@@ -66,6 +66,8 @@
+ "I have eggs, onions, tomatoes and rice, at most 6 steps, no peanuts, prefer fewest extra ingredients" -> {"intent":"match","ops":[{"field":"available","op":"set","values":["eggs","onions","tomatoes","rice"]},{"field":"max_steps","op":"set","value":"6"},{"field":"restrictions","op":"add","value":"peanut"},{"field":"preferences","op":"add","value":"fewest extra ingredients"}]}
+ "exclude eggs too" (after a match) -> {"intent":"followup_refine","ops":[{"field":"exclude","op":"add","value":"eggs"}]}
+ "what percent of recipes have garlic and onion" -> {"intent":"stats","tool_args":{"stats_op":"percentage","contains_all":["garlic","onion"]}}
++"replace the eggs in the second one" -> {"intent":"substitute","tool_args":{"target":"egg"}}
++"what can I use instead of cream in ar:1234, I can't have dairy" -> {"intent":"substitute","tool_args":{"target":"cream","recipe_id":"ar:1234"},"ops":[{"field":"restrictions","op":"add","value":"dairy"}]}
+ "5 recipes with tomato with the fewest steps" -> {"intent":"stats","tool_args":{"stats_op":"rank_steps","contains_all":["tomato"],"k":5,"order":"asc"}}
+ """
+ 

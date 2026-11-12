@@ -1,0 +1,11 @@
+--- tests/test_orchestrator.py	2026-11-12 09:04:38.262572969 +0000
++++ tests/test_orchestrator.py	2026-11-12 09:05:13.084213204 +0000
+@@ -135,7 +135,7 @@
+ 
+ def test_out_of_scope_and_unimplemented_intents(conn, tmp_path):
+     o, sc = mk(conn, tmp_path)
+-    assert "recipe" in o.turn("what's the weather").text and "not available yet" in o.turn("replace the eggs").text
++    assert "recipe" in o.turn("what's the weather").text and "Which recipe" in o.turn("replace the eggs").text
+     assert sc.writer_calls == 0
+ 
+ 

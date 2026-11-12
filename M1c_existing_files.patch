@@ -1,0 +1,142 @@
+--- a/recipebot/db.py
++++ b/recipebot/db.py
+@@ -43,7 +43,7 @@
+ CREATE INDEX idx_recipes_source ON recipes(source);
+ CREATE INDEX idx_recipes_valid ON recipes(is_valid);
+ CREATE TABLE ingredients (        -- filled in M1
+-    recipe_id TEXT, pos INT, raw TEXT, canon TEXT, qty REAL, unit TEXT, forms TEXT
++    recipe_id TEXT, pos INT, raw TEXT, canon TEXT, qty REAL, unit TEXT, forms TEXT, alts TEXT
+ );
+ CREATE TABLE meta (key TEXT PRIMARY KEY, value TEXT);
+ """
+@@ -135,23 +135,28 @@
+ 
+ 
+ # ---------- ingest / round-trip ----------
+-def recipe_row(src: str, orig_key: str, rec) -> tuple:
++def recipe_row(src: str, orig_key: str, rec, derived: tuple | None = None) -> tuple:
++    """derived = (is_valid, reason, n_ingredients, n_steps, n_steps_alt) from M1; None -> M0 validity, NULL counts."""
+     r = rec if isinstance(rec, dict) else {}
+     is_valid, reason = validate(rec)
++    extra = (None, None, None)
++    if derived:
++        is_valid, reason, *extra = derived
+     return (
+         make_id(src, orig_key), src, orig_key,
+         r.get("title"),
+         json.dumps(r.get("ingredients"), ensure_ascii=False),
+         r.get("instructions"),
+         r.get("picture_link"),
+-        is_valid, reason,
++        is_valid, reason, *extra,
+     )
+ 
+ 
+ INSERT_SQL = (
+     "INSERT INTO recipes (id, source, orig_key, title, ingredients_json, instructions, picture_link, "
+-    "is_valid, invalid_reason) VALUES (?,?,?,?,?,?,?,?,?)"
++    "is_valid, invalid_reason, n_ingredients, n_steps, n_steps_alt) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)"
+ )
++ING_INSERT_SQL = "INSERT INTO ingredients (recipe_id, pos, raw, canon, qty, unit, forms, alts) VALUES (?,?,?,?,?,?,?,?)"
+ 
+ 
+ def get_original(conn: sqlite3.Connection, recipe_id: str) -> dict | None:
+--- a/scripts/build_db.py
++++ b/scripts/build_db.py
+@@ -19,7 +19,9 @@
+ from datetime import datetime, timezone
+ from pathlib import Path
+ 
+-from recipebot.db import INSERT_SQL, SCHEMA, SOURCES, connect, data_dir, db_path, find_source_file, recipe_row
++from recipebot.db import ING_INSERT_SQL, INSERT_SQL, SCHEMA, SOURCES, connect, data_dir, db_path, find_source_file, recipe_row
++from recipebot.normalize import CONFIG_DIR, clean_ingredients
++from recipebot.steps import count_steps
+ 
+ 
+ def sha256_file(path: Path) -> str:
+@@ -30,6 +32,30 @@
+     return h.hexdigest()
+ 
+ 
++def config_sha() -> str:
++    h = hashlib.sha256()
++    for p in sorted(Path(CONFIG_DIR).glob("*.yaml")):
++        h.update(p.name.encode() + p.read_bytes())
++    return h.hexdigest()
++
++
++def derive(rec):
++    """M1: (recipe_derived_tuple, ingredient_rows). is_valid = title AND >=1 clean ingredient AND >=1 step."""
++    r = rec if isinstance(rec, dict) else {}
++    ings = r.get("ingredients")
++    rows = [(d["pos"], d["raw"], d["canon"], d["qty"], d["unit"], ",".join(d["forms"]) or None,
++             json.dumps(d["alts"], ensure_ascii=False) if d["alts"] else None)
++            for d in clean_ingredients(ings if isinstance(ings, list) else [])]
++    n_steps, n_alt = count_steps(r.get("instructions"))
++    title = r.get("title")
++    if not isinstance(rec, dict):
++        reasons = ["malformed_record"]
++    else:
++        reasons = [x for x, bad in (("no_title", not (isinstance(title, str) and title.strip())),
++                                    ("no_ingredients", not rows), ("no_instructions", n_steps == 0)) if bad]
++    return (0 if reasons else 1, ",".join(reasons) or None, len(rows), n_steps, n_alt), rows
++
++
+ def iter_records(obj, log=print):
+     if isinstance(obj, dict):
+         for k, v in obj.items():
+@@ -86,15 +112,20 @@
+             quota = min(sample // len(SOURCES) + (1 if i < sample % len(SOURCES) else 0), n_file)
+             idx = sorted(random.Random(f"{seed}:{src}").sample(range(n_file), quota))
+             items = [items[j] for j in idx]
+-        batch, loaded = [], 0
++        batch, ibatch, loaded = [], [], 0
+         for key, rec in items:
+-            batch.append(recipe_row(src, key, rec))
++            derived, rows = derive(rec)
++            batch.append(recipe_row(src, key, rec, derived))
++            rid = batch[-1][0]
++            ibatch.extend((rid, *row) for row in rows)
+             if len(batch) >= 5000:
+                 conn.executemany(INSERT_SQL, batch)
++                conn.executemany(ING_INSERT_SQL, ibatch)
+                 loaded += len(batch)
+-                batch = []
++                batch, ibatch = [], []
+         if batch:
+             conn.executemany(INSERT_SQL, batch)
++            conn.executemany(ING_INSERT_SQL, ibatch)
+             loaded += len(batch)
+         meta[f"source_file:{src}"] = path.name
+         meta[f"sha256:{src}"] = sha256_file(path)
+@@ -105,7 +136,9 @@
+         log(f"  loaded {loaded:,} / {n_file:,}")
+         del obj, items
+ 
++    meta["config_sha"] = config_sha()
+     conn.executemany("INSERT INTO meta VALUES (?,?)", list(meta.items()))
++    conn.executescript("CREATE INDEX idx_ing_recipe ON ingredients(recipe_id); CREATE INDEX idx_ing_canon ON ingredients(canon);")
+     conn.commit()
+     valid, total = conn.execute("SELECT SUM(is_valid), COUNT(*) FROM recipes").fetchone()
+     conn.close()
+--- a/tests/test_ingest.py
++++ b/tests/test_ingest.py
+@@ -118,9 +118,15 @@
+     assert {i: r for i, (v, r) in got.items() if not v} == EXPECTED_REASONS
+ 
+ 
+-def test_m1_columns_left_null(ds):
+-    assert ds.conn.execute("SELECT COUNT(*) FROM recipes WHERE n_ingredients IS NOT NULL OR n_steps IS NOT NULL OR n_steps_alt IS NOT NULL").fetchone()[0] == 0
+-    assert ds.conn.execute("SELECT COUNT(*) FROM ingredients").fetchone()[0] == 0
++def test_m1_columns_filled_and_consistent(ds):
++    c = ds.conn
++    assert c.execute("SELECT COUNT(*) FROM recipes WHERE n_ingredients IS NULL OR n_steps IS NULL OR n_steps_alt IS NULL").fetchone()[0] == 0
++    assert c.execute("SELECT COUNT(*) FROM recipes WHERE is_valid=1 AND (n_ingredients<1 OR n_steps<1)").fetchone()[0] == 0
++    assert c.execute("SELECT COUNT(*) FROM recipes r WHERE n_ingredients != (SELECT COUNT(*) FROM ingredients i WHERE i.recipe_id=r.id)").fetchone()[0] == 0
++    assert c.execute("SELECT COUNT(*) FROM ingredients WHERE canon IS NULL OR canon=''").fetchone()[0] == 0
++    if ds.kind == "synthetic":
++        assert c.execute("SELECT n_ingredients, n_steps FROM recipes WHERE id='ar:k1'").fetchone() == (2, 3)
++        assert c.execute("SELECT canon, qty, unit FROM ingredients WHERE recipe_id='ar:k1' ORDER BY pos").fetchall() == [("garlic", 1.0, "clove"), ("onion", 0.5, "cup")]
+ 
+ 
+ def test_sample_build_is_deterministic_and_faithful(tmp_path):

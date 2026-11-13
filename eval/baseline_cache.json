@@ -1,0 +1,32 @@
+{
+ "S01": {
+  "question": "How many recipes contain both garlic and onion?",
+  "model": "gemini-2.5-flash",
+  "answer": "70,000 recipes contain both garlic and onion."
+ },
+ "S02": {
+  "question": "What percentage of recipes contain both garlic and onion?",
+  "model": "gemini-2.5-flash",
+  "answer": "48.5% of recipes in the dataset contain both garlic and onion."
+ },
+ "S03": {
+  "question": "How many recipes contain tomato but no mushroom?",
+  "model": "gemini-2.5-flash",
+  "answer": "19,345 recipes contain tomato but no mushroom."
+ },
+ "S04": {
+  "question": "How many recipes have 'bread' in the title?",
+  "model": "gemini-2.5-flash",
+  "answer": "2345 recipes have 'bread' in their title."
+ },
+ "S07": {
+  "question": "On average, how many ingredients does a recipe have?",
+  "model": "gemini-2.5-flash",
+  "answer": "10.8 A recipe in the dataset typically includes about eleven ingredients."
+ },
+ "S10": {
+  "question": "Of the recipes with tomato, what percentage also contain onion?",
+  "model": "gemini-2.5-flash",
+  "answer": "80.0% of recipes with tomato also contain onion."
+ }
+}

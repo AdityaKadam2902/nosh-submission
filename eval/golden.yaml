@@ -1,0 +1,39 @@
+# Golden set (ARCHITECTURE §13). NO hand-typed expected numbers: truth is recomputed at run time by eval/reference.py (independent pure-Python
+# pass over the original records) or by invariants checked on the tool output. So the same file validates sample.db and the full DB.
+# kinds: stats | search | match | substitute | chat (chat needs --llm). `baseline: <key>` marks scalar stats cases that the one-shot baseline is asked too.
+cases:
+# ---------------- T1 stats (exact vs independent recomputation)
+- {id: S01, task: T1, kind: stats, question: "How many recipes contain both garlic and onion?", spec: {op: count, filters: {contains_all: [garlic, onion]}}, baseline: count}
+- {id: S02, task: T1, kind: stats, question: "What percentage of recipes contain both garlic and onion?", spec: {op: percentage, filters: {contains_all: [garlic, onion]}}, baseline: percentage}
+- {id: S03, task: T1, kind: stats, question: "How many recipes contain tomato but no mushroom?", spec: {op: count, filters: {contains_all: [tomato], exclude: [mushroom]}}, baseline: count}
+- {id: S04, task: T1, kind: stats, question: "How many recipes have 'bread' in the title?", spec: {op: count, filters: {title_contains: bread}}, baseline: count}
+- {id: S05, task: T1, kind: stats, question: "What are the 10 most common ingredients?", spec: {op: top_ingredients, k: 10}}
+- {id: S06, task: T1, kind: stats, question: "What are the 5 most common ingredients in recipes with garlic?", spec: {op: top_ingredients, k: 5, filters: {contains_all: [garlic]}}}
+- {id: S07, task: T1, kind: stats, question: "On average, how many ingredients does a recipe have?", spec: {op: ingredient_count_summary}, baseline: mean}
+- {id: S08, task: T1, kind: stats, question: "Which 5 tomato recipes have the fewest steps?", spec: {op: rank_steps, k: 5, filters: {contains_all: [tomato]}}}
+- {id: S09, task: T1, kind: stats, question: "Which 5 recipes have the most steps?", spec: {op: rank_steps, k: 5, order: desc}}
+- {id: S10, task: T1, kind: stats, question: "Of the recipes with tomato, what percentage also contain onion?", spec: {op: percentage, filters: {contains_all: [onion]}, of: {contains_all: [tomato]}}, baseline: percentage}
+# ---------------- T1 search + hard constraints (violations must be 0; 'possible' never in the main list)
+- {id: R01, task: T1, kind: search, args: {query: penne pasta, restrictions: [dairy], k: 10}}
+- {id: R02, task: T1, kind: search, args: {query: chocolate cake, restrictions: [egg, dairy], k: 10}}
+- {id: R03, task: T1, kind: search, args: {query: stir fry, restrictions: [peanut], exclude: [mushroom], k: 10}}
+- {id: R04, task: T1, kind: search, args: {query: pancakes, restrictions: [gluten], max_steps: 6, k: 10}}
+- {id: R05, task: T1, kind: search, args: {query: tomato soup, include: [tomato], exclude: [onion], k: 10}}
+- {id: R06, task: T1, kind: search, args: {query: cookies, restrictions: [peanut, tree_nut], max_steps: 8, k: 10}}
+# ---------------- T2 matching
+- {id: M01, task: T2, kind: match, args: {available: [eggs, onions, tomatoes, rice], max_steps: 6, restrictions: [peanut]}}
+- {id: M02, task: T2, kind: match, args: {available: [eggs, onions, tomatoes, rice], max_steps: 6, restrictions: [peanut], exclude: [egg]}}
+- {id: M03, task: T2, kind: match, args: {available: [peanut butter], restrictions: [peanut]}, expect_no_match: true}   # every recipe with the only ingredient violates the restriction
+- {id: M04, task: T2, kind: match, args: {available: [chicken, rice, garlic], restrictions: [dairy]}}
+- {id: M05, task: T2, kind: match, args: {available: [flour, sugar, eggs, butter], preferences: [fewest_missing]}}
+# ---------------- T3 substitution (recipe chosen at run time by selector: first valid id matching; invariants + honest grade)
+- {id: T01, task: T3, kind: substitute, pick: {title_contains: banana bread, contains: egg}, target: egg}                       # graded evidence + edit by code
+- {id: T02, task: T3, kind: substitute, pick: [{title_contains: pasta, contains: cream}, {title_contains: alfredo, contains: cream}, {title_contains: sauce, contains: cream}, {contains: cream}], target: cream, restrictions: [dairy]}    # no proposed candidate may violate dairy
+- {id: T03, task: T3, kind: substitute, pick: [{title_contains: oatmeal cookie, contains: butter}, {title_contains: cookie, contains: butter}, {contains: butter}], target: butter}               # whatever grade the data gives (indirect/conflicting/...) is reported, never inflated
+- {id: T04, task: T3, kind: substitute, pick: [{contains: saffron, target: saffron}, {contains: cardamom, target: cardamom}, {contains: fenugreek, target: fenugreek}, {contains: tarragon, target: tarragon}], target: saffron, expect_status: [refused], expect_grade: [insufficient]}   # abstention
+- {id: T05, task: T3, kind: substitute, pick: [{title_contains: pasta, contains: cream}, {title_contains: alfredo, contains: cream}, {title_contains: sauce, contains: cream}, {contains: cream}], target: cream, restrictions: [dairy], use: milk, expect_status: [blocked, refused]}  # forced violation attempt
+# ---------------- multi-turn through the planner (needs --llm; cached, ~1-2 LLM calls per turn)
+- {id: C01, task: T1, kind: chat, turns: ["Find penne pasta", "I cannot have dairy", "also no mushrooms"], expect_restrictions: [dairy], expect_exclude: [mushroom]}
+- {id: C02, task: T1, kind: chat, turns: ["How many recipes contain both garlic and onion, and what percentage is that?"], ref_stats: S01, expect_numbers_from: [S01, S02]}
+- {id: C03, task: T1, kind: chat, turns: ["Which 5 recipes with tomato have the fewest steps?"], ref_stats: S08, expect_ids_from: S08}
+- {id: C04, task: T2, kind: chat, turns: ["I have eggs, onions, tomatoes and rice. What can I cook in at most 6 steps, no peanuts?", "exclude eggs too"], expect_restrictions: [peanut], expect_exclude: [egg]}

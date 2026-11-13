@@ -27,6 +27,7 @@ class ToolArgs(BaseModel):
     row: int | None = None
     recipe_id: str | None = None
     target: str | None = None
+    use: str | None = None
 
 
 class Plan(BaseModel):
@@ -46,7 +47,7 @@ INTENTS
 - stats: questions about counts, percentages, most common ingredients, average ingredients, fewest/most steps over the dataset. Set tool_args.stats_op (count|percentage|top_ingredients|ingredient_count_summary|rank_steps) and filters (contains_all, contains_any, exclude, title_contains, source, k, order). Stats ignore conversation state: use only what the user says.
 - recipe_detail: the user wants to see one recipe ("show the second one", "tell me about that recipe", or an id). Leave tool_args.row/recipe_id empty unless the user gave an explicit number or id.
 - match: the user lists ingredients they HAVE and wants recipes. Put them in ops (available set/add, one value each, keep quantities like "2 eggs"), plus any limits (max_steps, restrictions, exclude) and ranking wishes in ops (preferences add, e.g. "fewest extra ingredients", "fewest steps", "most matched").
-- substitute: the user wants a replacement for / to leave out an ingredient in a recipe. Set tool_args.target (the ingredient to replace, one name) and, only if the user gave one, tool_args.recipe_id (an id) or tool_args.row (a number from the last results). Otherwise leave them empty: code uses the focus recipe. Dietary needs go in ops restrictions add, as always. You never suggest replacements yourself.
+- substitute: the user wants a replacement for / to leave out an ingredient in a recipe. Set tool_args.target (the ingredient to replace, one name) and, only if the user gave one, tool_args.recipe_id (an id) or tool_args.row (a number from the last results). Otherwise leave them empty: code uses the focus recipe. If the user picks one of the replacement options just shown ("use buttermilk", "go with the first one"), set tool_args.use to that option's name (target may stay empty). Dietary needs go in ops restrictions add, as always. You never suggest replacements yourself.
 - chat: greetings/thanks. out_of_scope: anything unrelated to recipes in this dataset.
 
 OPS = {field, op, value|values}. fields: dish_query, include, exclude, restrictions, max_steps, available, preferences, focus_recipe_id. op: set|add|remove|clear.
@@ -65,6 +66,7 @@ EXAMPLES
 "show the second one" -> {"intent":"recipe_detail"}
 "I have eggs, onions, tomatoes and rice, at most 6 steps, no peanuts, prefer fewest extra ingredients" -> {"intent":"match","ops":[{"field":"available","op":"set","values":["eggs","onions","tomatoes","rice"]},{"field":"max_steps","op":"set","value":"6"},{"field":"restrictions","op":"add","value":"peanut"},{"field":"preferences","op":"add","value":"fewest extra ingredients"}]}
 "exclude eggs too" (after a match) -> {"intent":"followup_refine","ops":[{"field":"exclude","op":"add","value":"eggs"}]}
+"I have only peanut butter and I'm allergic to peanuts" -> {"intent":"match","ops":[{"field":"available","op":"set","value":"peanut butter"},{"field":"restrictions","op":"add","value":"peanut"}]}  (never ask for clarification here: the code answers with an explicit NO_MATCH)
 "what percent of recipes have garlic and onion" -> {"intent":"stats","tool_args":{"stats_op":"percentage","contains_all":["garlic","onion"]}}
 "replace the eggs in the second one" -> {"intent":"substitute","tool_args":{"target":"egg"}}
 "what can I use instead of cream in ar:1234, I can't have dairy" -> {"intent":"substitute","tool_args":{"target":"cream","recipe_id":"ar:1234"},"ops":[{"field":"restrictions","op":"add","value":"dairy"}]}

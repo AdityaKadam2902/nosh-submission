@@ -96,7 +96,13 @@ def _clean(s) -> str:
 
 
 def _fmt_q(q) -> str:
-    return f"{q:g}"
+    """0.25 -> '1/4', 1.625 -> '1 5/8' (denominators up to 8), else a plain number."""
+    from fractions import Fraction
+    f = Fraction(q).limit_denominator(8)
+    if abs(float(f) - q) > 1e-9:
+        return f"{q:g}"
+    w, r = divmod(f.numerator, f.denominator)
+    return " ".join(x for x in (str(w) if w else "", f"{r}/{f.denominator}" if r else "") if x) or "0"
 
 
 def _pct(x) -> float:
@@ -242,13 +248,14 @@ def _typical_amount(members_hit: list[dict], names: list[str], n_min: int):
     n = len(qs)
     if n < n_min:
         return None
-    return {"qty": statistics.median(qs), "unit": unit or None, "n": n}
+    med = statistics.median(qs)
+    return {"qty": med, "qty_text": _fmt_q(med), "unit": unit or None, "n": n}
 
 
 def _new_line(name: str, amt) -> str:
     if not amt:
         return name
-    return f"{_fmt_q(amt['qty'])} " + (f"{amt['unit']} " if amt["unit"] else "") + name
+    return f"{amt['qty_text']} " + (f"{amt['unit']} " if amt["unit"] else "") + name
 
 
 # ---------------------------------------------------------------- main
@@ -365,7 +372,8 @@ def _run(conn, cfg, recipe_id, target_in, tcanon, restrictions, exclude, use) ->
                 noise.append(c)
             below += 1
             continue
-        c["new_line"] = _new_line(c["name"], c["typical_amount"])
+        c["amount_inserted"] = bool(th["insert_amount"] and c["typical_amount"])
+        c["new_line"] = _new_line(c["name"], c["typical_amount"] if c["amount_inserted"] else None)
         rows_all.append(c)
     base["skipped_already_in_recipe"] = skipped
 
@@ -484,9 +492,14 @@ def _apply_edit(base, sel, rec, parsed, orig_lines, tpos, pos_rows, restrictions
             edits.append({"op": "remove", "pos": p, "old": old, "new": None})
         else:
             amt = sel.get("typical_amount")
-            edits.append({"op": "replace", "pos": p, "old": old, "new": sel["new_line"],
-                          "amount_basis": (f"median of {amt['n']} similar recipes that give an amount in the same unit (not a tested conversion)" if amt else
-                                           "no reliable typical amount in the cohort: quantity not determined")})
+            if amt and sel.get("amount_inserted"):
+                basis = f"amount = median of {amt['n']} similar recipes that give one in the same unit (not a tested conversion)"
+            elif amt:
+                basis = (f"amount NOT inserted: similar recipes typically use {amt['qty_text']}{(' ' + amt['unit']) if amt['unit'] else ''} "
+                         f"(median of {amt['n']}), but that is not comparable to the removed line; set the quantity yourself")
+            else:
+                basis = "no reliable typical amount in the cohort: quantity not determined; set it yourself"
+            edits.append({"op": "replace", "pos": p, "old": old, "new": sel["new_line"], "amount_basis": basis})
     base["edits"] = edits
     ing_pos = {d["pos"] for d in parsed}
     final, marks = [], []

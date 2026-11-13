@@ -27,7 +27,7 @@ HELP = """commands:
   /match --have eggs onions "2 tomatoes" rice [--exclude a b] [--restrict peanut] [--steps N] [--prefer fewest_missing most_matched fewest_steps] [--no-staples] [-k N]
   /stats <op> [--all a b] [--any a b] [--exclude a b] [--title t] [--source ar|epi|fn] [-k N] [--order asc|desc] [--of-all a b] [--skip-staples]
       ops: count | percentage | top_ingredients | ingredient_count_summary | rank_steps
-  /sub <id | n> --replace egg [--restrict dairy] [--exclude a b] [--use <mined candidate>]   evidence-based ingredient substitution (n = row number)
+  /sub <id | n> --replace egg [--restrict dairy] [--exclude a b] [--use <mined candidate>] [--draft]   evidence-based ingredient substitution (n = row number)
   /show <id | n>     (n = row number from the last result)     /state   /reset   /help   /quit
   (free-text chat arrives in M3)"""
 
@@ -70,6 +70,7 @@ def _parsers():
     u.add_argument("--restrict", nargs="+", default=[])
     u.add_argument("--exclude", nargs="+", default=[])
     u.add_argument("--use", nargs="+", default=None)
+    u.add_argument("--draft", action="store_true")
     return s, t, m, u
 
 
@@ -92,7 +93,7 @@ def _fmt_substitute(res: dict) -> str:
         for i, c in enumerate(res["candidates"], 1):
             amt = c.get("typical_amount")
             out.append(f"  {i}. {c['name']:18} {c['n_without']}/{co['without']} = {c['pct_without']:g}% | {c['n_with']}/{co['with']} = {c['pct_with']:g}% | lift {'n/a' if c['lift'] is None else c['lift']}  [{c['grade']}]"
-                       + (f"  typical amount {amt['qty']:g}{(' ' + amt['unit']) if amt['unit'] else ''} (n={amt['n']})" if amt else ""))
+                       + (f"  typical amount in these recipes {amt['qty_text']}{(' ' + amt['unit']) if amt['unit'] else ''} (n={amt['n']}; shown for information)" if amt else ""))
             out.append(f"       ids: {', '.join(c['support_ids'])}")
     if res.get("omission"):
         o = res["omission"]
@@ -117,7 +118,18 @@ def _fmt_substitute(res: dict) -> str:
             out.append(f"constraint {r} (edited list): {v['state']}" + (f" ({ev})" if ev else "") + (f" -- {v['note']}" if v["note"] else ""))
     for n in res["notes"]:
         out.append("note: " + n)
-    out.append("predictions (not dataset evidence): none in this tier")
+    if res.get("predictions"):
+        pr = res["predictions"][0]
+        out.append(f"\nPREDICTION (LLM-drafted revised steps; validated by code; NOT dataset evidence) [attempts: {pr['attempts']}]")
+        for i, t in enumerate(pr["steps"], 1):
+            out.append(f"  {i:2}. {t}" + ("   <- changed" if i in pr["changed_steps"] else ""))
+        for n in pr["notes"]:
+            out.append(f"  caution: {n}")
+        out.append("  " + pr["disclaimer"])
+    elif res.get("prediction_status") in ("rejected", "llm_unavailable"):
+        out.append(f"revised steps: draft {res['prediction_status'].replace('_', ' ')} ({'; '.join(res.get('prediction_problems', []))[:300]}); showing dataset evidence only")
+    else:
+        out.append("predictions (not dataset evidence): none; add --draft (needs the LLM) for validated revised steps")
     out.append("(dataset evidence about similar recipes, not a tested conversion; not medical advice; labels and cross-contamination not verified)")
     return "\n".join(out)
 
@@ -258,6 +270,11 @@ def handle(line: str, state: dict, conn, orch=None) -> str:
             res = substitute(rid, " ".join(a.replace), {"restrictions": a.restrict, "exclude": a.exclude}, conn=conn, use=" ".join(a.use) if a.use else None)
             if orch is not None:
                 orch.state.focus_recipe_id = rid
+            if a.draft and orch is None:
+                res["notes"].append("--draft needs the LLM (GEMINI_API_KEY in .env); showing the dataset evidence only")
+            elif a.draft:
+                from recipebot.substitute_draft import attach_prediction
+                attach_prediction(res, orch.llm, conn)
             return _fmt_substitute(res) + "\n\n" + render_receipt(res["receipt"])
         if cmd == "/show":
             if not args:

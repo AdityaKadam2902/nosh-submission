@@ -41,9 +41,10 @@ class Orchestrator:
         self.use_writer = (os.environ.get("RECIPEBOT_WRITER", "on").lower() != "off") if use_writer is None else use_writer
         self.state = state or ConversationState()
         self.history: list[tuple[str, str]] = []
+        self._last_sub: dict = {}
 
     def reset(self) -> None:
-        self.state, self.history = ConversationState(), []
+        self.state, self.history, self._last_sub = ConversationState(), [], {}
 
     # ---- tools ----
     def _run_search(self, plan: Plan):
@@ -76,10 +77,13 @@ class Orchestrator:
         from recipebot.cli import _fmt_match
         return payload, _fmt_match(res), res["receipt"], ids
 
-    def _run_stats(self, plan: Plan):
+    def _run_stats(self, plan: Plan, user_text: str = ""):
         ta = plan.tool_args
         if not ta.stats_op:
             return None
+        import re as _re
+        if ta.stats_op == "count" and _re.search(r"percent|%|proportion|fraction|share of", user_text, _re.I):
+            ta = ta.model_copy(update={"stats_op": "percentage"})  # count AND percentage requested: 'percentage' returns both
         spec = {"op": ta.stats_op, "k": ta.k or 10, "order": ta.order or "asc", "skip_staples": ta.skip_staples,
                 "filters": {"contains_all": ta.contains_all, "contains_any": ta.contains_any, "exclude": ta.exclude,
                             "title_contains": ta.title_contains, "source": ta.source}, "of": {"contains_all": ta.of_all} if ta.of_all else None}
@@ -120,10 +124,15 @@ class Orchestrator:
         rid = rid or s.focus_recipe_id
         if rid is None:
             return "clarify", "Which recipe? Give a row number from the last results (e.g. 'replace the eggs in the second one') or a recipe id."
-        if not ta.target:
+        target = ta.target or (self._last_sub.get("target") if ta.use and self._last_sub.get("rid") == rid else None)
+        if not target:
             return "clarify", "Which ingredient should I replace?"
-        res = substitute(rid, ta.target, {"restrictions": s.restrictions, "exclude": s.exclude}, conn=self.conn)
+        res = substitute(rid, target, {"restrictions": s.restrictions, "exclude": s.exclude}, conn=self.conn, use=ta.use)
         self.state.focus_recipe_id = rid
+        self._last_sub = {"rid": rid, "target": target}
+        if self.use_writer and res["status"] == "ok":  # Tier 2: one cached LLM call, validated by code; skipped when the writer is off
+            from recipebot.substitute_draft import attach_prediction
+            attach_prediction(res, self.llm, self.conn)
         co = res["cohort"]
         cand = lambda c: {"name": c["name"], "used_in_without": c["n_without"], "pct_without": c["pct_without"], "used_in_with": c["n_with"], "lift": c["lift"],
                           "grade": c["grade"], "ids": c["support_ids"]}
@@ -131,7 +140,7 @@ class Orchestrator:
                    "grade_reason": res["grade_reason"], "cohort": {k: co[k] for k in ("size", "with", "without", "same_dish")} if co else None,
                    "candidates": [cand(c) for c in res["candidates"][:5]], "blocked": [{"name": c["name"], "used_in_without": c["n_without"]} for c in res["blocked"]],
                    "uncertain": [{"name": c["name"]} for c in res["uncertain"]], "selected": res["selected"], "edited_ingredients": res["edited_ingredients"],
-                   "refusal": res["refusal"], "restrictions_applied": res["restrictions"], "note": "evidence from similar recipes; not a tested conversion"}
+                   "refusal": res["refusal"], "restrictions_applied": res["restrictions"], "prediction_status": res.get("prediction_status"), "note": "evidence from similar recipes; not a tested conversion"}
         from recipebot.cli import _fmt_substitute
         ids = list(dict.fromkeys([rid] + [i for c in res["candidates"] + res["blocked"] + res["uncertain"] for i in c["support_ids"]]))
         return payload, _fmt_substitute(res), res["receipt"], ids
@@ -166,7 +175,7 @@ class Orchestrator:
                 if out[0] == "clarify":
                     return self._finish(user_text, TurnResult(out[1], intent, notes=notes))
             elif intent == "stats":
-                out = self._run_stats(plan)
+                out = self._run_stats(plan, user_text)
                 if out is None:
                     return self._finish(user_text, TurnResult("Which statistic? (count, percentage, top ingredients, ingredients per recipe, fewest/most steps)", intent, notes=notes))
             else:  # recipe_detail

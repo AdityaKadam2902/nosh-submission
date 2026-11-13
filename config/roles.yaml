@@ -28,9 +28,11 @@ defaults:
     min_same_dish_without: 4       # fewer same-dish recipes without the target -> evidence is from related dishes -> `indirect`
     min_with_for_lift: 3           # |C_with| below this: lift is unreliable -> at best `indirect`
     tie_rel: 0.20                  # two candidates within 20% (relative) of each other -> `conflicting`
-    strong:   {min_share: 0.25, min_lift: 2.0, min_support: 3, margin_rel: 0.30}   # margin: runner-up share <= leader*(1-margin_rel)
+    strong:   {min_share: 0.25, min_lift: 2.0, min_support: 5, margin_rel: 0.30}   # margin: runner-up share <= leader*(1-margin_rel)
     moderate: {min_share: 0.15, min_lift: 1.5, min_support: 2}
     omit:     {min_share: 0.50, max_grade: moderate}   # omission = similar recipes without the target that use NO can_fill item
+  insert_amount: false             # false (default): never write a quantity into the edited line (a cohort median is NOT comparable to the removed
+                                   # line, e.g. 2 eggs vs 1 5/8 cup buttermilk); the typical amount is shown as information only. true: insert the median.
   typical_amount_min_n: 3          # report a typical amount only if >= n cohort recipes give a qty in the same unit
   support_ids: 5                   # supporting recipe ids listed per candidate (most similar first)
 
@@ -147,3 +149,16 @@ ingredients:
     roles: [fat, tenderness, flakiness]
     omit_ok: false
     can_fill: [butter, margarine, lard, vegetable oil, coconut oil, ghee]
+
+# Tier 2 (recipebot/substitute_draft.py): the LLM drafts revised steps; code validates them. Everything it writes is labelled "prediction".
+draft:
+  repair_attempts: 1               # one re-ask with the validator's problems, then the draft is REJECTED (evidence-only answer is shown)
+  max_extra_steps: 2               # draft may have at most this many more steps than the original
+  max_step_chars: 400
+  max_notes: 2                     # short hedged cautions about the role the removed ingredient played
+  note_max_words: 30
+  vocab_min_count: 30              # a dataset ingredient name must occur >= this often to count as a "known food" in the validator
+  allow_foods: [water, salt, black pepper, pepper, ice, cooking spray]   # may be mentioned even if not in the edited list
+  removal_context_words: [omit, omitted, omitting, removed, without, instead of, in place of, replace, replaced, replacing, substitute, substituted, skip, skipped, leave out, left out]
+  banned_phrases: [safe, allergen free, allergy safe, guarantee, guaranteed, identical, exactly the same, taste the same, tastes the same, same taste,
+    no difference, perfect, perfectly, foolproof, will work, medical, cure, cures, doctor approved]

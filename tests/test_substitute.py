@@ -123,13 +123,21 @@ def test_banana_bread_minus_eggs_strong_with_counts_ids_and_edit(conn):
     assert "baking soda" not in cnames(res)  # already in the source recipe
     # edit applied by code, on the right line, typical amount from the cohort (median of 1/4, 1/4, 1/2, 1/4, 1/4 cup)
     e = res["edits"][0]
-    assert e["op"] == "replace" and e["old"] == "2 large eggs" and e["new"] == "0.25 cup applesauce" and "median of 5" in e["amount_basis"]
-    assert res["edited_ingredients"][0] == "0.25 cup applesauce" and "2 large eggs" not in res["edited_ingredients"] and len(res["edited_ingredients"]) == 7
+    assert e["op"] == "replace" and e["old"] == "2 large eggs" and e["new"] == "applesauce"  # default: NO quantity written into the line
+    assert "NOT inserted" in e["amount_basis"] and "1/4 cup" in e["amount_basis"] and "median of 5" in e["amount_basis"] and top["typical_amount"]["qty_text"] == "1/4"
+    assert res["edited_ingredients"][0] == "applesauce" and "2 large eggs" not in res["edited_ingredients"] and len(res["edited_ingredients"]) == 7
+    ins = substitute("ar:bb0", "eggs", conn=conn, config={"defaults": {"insert_amount": True}})  # opt-in via config only
+    assert ins["edits"][0]["new"] == "1/4 cup applesauce" and "median of 5" in ins["edits"][0]["amount_basis"]
     assert res["predictions"] == []  # Tier 1: no LLM text
     r = res["receipt"]
     assert r["tool"] == "substitute" and "ar:bb0" in r["recipe_ids"] and set(top["support_ids"]) <= set(r["recipe_ids"]) and r["n_analyzed"] == 16
     assert "config/roles.yaml" in r["formula"] and "lift" in r["formula"]
     assert r["dataset"]["valid"] == len(RAW["ar"])
+
+
+def test_fraction_formatting_and_no_cohort_median_in_line_by_default():
+    from recipebot.substitute import _fmt_q
+    assert [_fmt_q(x) for x in (0.25, 1.625, 2, 0.5, 0.3)] == ["1/4", "1 5/8", "2", "1/2", "0.3"]
 
 
 def test_cohort_excludes_other_dish_class_and_low_similarity(conn):
@@ -269,7 +277,7 @@ def test_cli_sub_command(conn):
     st = {}
     out = handle("/sub ar:bb0 --replace egg --restrict egg", st, conn)
     assert "EVIDENCE GRADE: strong" in out and "applesauce" in out and "BLOCKED" in out.upper() and "mayonnaise" in out and "--- RECEIPT ---" in out
-    assert "UPDATED INGREDIENTS" in out and "0.25 cup applesauce" in out and "safe" not in out.lower().replace("not verified", "")
+    assert "UPDATED INGREDIENTS" in out and "NOT inserted" in out and "1/4 cup" in out and "safe" not in out.lower().replace("not verified", "")
     st2 = {"last_ids": ["ar:pa0", "ar:bb0"]}
     assert "ar:bb0" in handle("/sub 2 --replace egg", st2, conn)
     assert "usage" in handle("/sub", {}, conn).lower() or "error" in handle("/sub", {}, conn).lower()
@@ -319,3 +327,119 @@ def test_orchestrator_writer_prose_is_verified_against_substitute_payload(conn):
     o = Orchestrator(LLM(model="m", backend=sc, cache_dir=None, sleep=lambda s: None, jitter=False, max_retries=1), conn, use_writer=True)
     r = o.turn("swap the eggs in ar:bb0")
     assert sc.writer_calls >= 1 and not r.fallback and "Applesauce is the best-supported replacement." in r.text and "applesauce" in r.text
+
+
+# ================= Tier 2: LLM-drafted revised steps, validated by code (mock LLM only)
+from recipebot.substitute_draft import Draft, attach_prediction, validate  # noqa: E402
+
+V1 = {"draft": {"vocab_min_count": 1}}  # tiny fixture DB: every ingredient counts as a 'known food'
+GOOD = json.dumps({"steps": ["Mix.", "Stir in the applesauce.", "Bake."], "changed_steps": [2], "notes": ["Without the egg, the loaf may be less bound."]})
+
+
+class Q:
+    """Mock Gemini backend: returns queued replies in order (planner replies by message, as in Script)."""
+    def __init__(self, replies, plans=None):
+        self.replies, self.plans, self.calls = list(replies), plans or {}, 0
+
+    def __call__(self, model, prompt, system, schema, timeout):
+        if system and "PLANNER" in system:
+            return self.plans[prompt.split("USER MESSAGE: ", 1)[1]].model_dump_json()
+        if system and "REVISER" in system:
+            self.calls += 1
+            return self.replies.pop(0) if len(self.replies) > 1 else self.replies[0]
+        return "Applesauce is the best-supported replacement."
+
+
+def llm_for(*replies, plans=None):
+    q = Q(replies, plans)
+    return LLM(model="m", backend=q, cache_dir=None, sleep=lambda s: None, jitter=False, max_retries=1), q
+
+
+def pred(conn, *replies, cid="ar:bb0", target="egg"):
+    llm, q = llm_for(*replies)
+    res = attach_prediction(substitute(cid, target, conn=conn), llm, conn, V1)
+    return res, q
+
+
+def draft_json(steps, notes=(), changed=()):
+    return json.dumps({"steps": list(steps), "changed_steps": list(changed), "notes": list(notes)})
+
+
+def test_good_draft_is_accepted_and_labelled_by_code(conn):
+    res, q = pred(conn, GOOD)
+    p = res["predictions"][0]
+    assert res["prediction_status"] == "ok" and q.calls == 1 and p["label"] == "prediction" and p["attempts"] == 1
+    assert p["steps"] == ["Mix.", "Stir in the applesauce.", "Bake."] and p["changed_steps"] == [2] and "NOT" not in p["disclaimer"].replace("Not dataset", "")
+    assert "Not dataset evidence" in p["disclaimer"] and res["edited_ingredients"][0] == "applesauce"  # evidence + edit untouched by Tier 2
+
+
+def test_draft_that_still_uses_removed_ingredient_gets_one_repair(conn):
+    res, q = pred(conn, draft_json(["Beat the eggs.", "Bake."]), GOOD)
+    assert res["prediction_status"] == "ok" and q.calls == 2 and res["predictions"][0]["attempts"] == 2
+
+
+@pytest.mark.parametrize("bad,expect", [
+    (["Mix.", "Fold in the yogurt.", "Bake."], "'yogurt', which is not in the edited ingredient list"),   # ingredient not in the edited list
+    (["Mix.", "Bake for 35 minutes."], "number 35"),                                                       # invented time/temperature/quantity
+    (["Mix.", "Bake until done. It will be safe and taste the same."], "not allowed ('safe')"),             # banned claim
+    (["Mix.", "Stir in the applesauce.", "Bake.", "Cool.", "Slice.", "Serve."], "at most 2 more allowed"),  # runaway length
+    ([], "no steps returned"),
+])
+def test_validator_rejects_unsupported_drafts_after_one_repair(conn, bad, expect):
+    res, q = pred(conn, draft_json(bad))  # the same bad draft on the repair too
+    assert res["prediction_status"] == "rejected" and res["predictions"] == [] and q.calls == 2
+    assert any(expect in x for x in res["prediction_problems"]), res["prediction_problems"]
+    assert res["status"] == "ok" and res["edited_ingredients"]  # the dataset evidence is still returned
+
+
+def test_validate_function_directly_and_numbers_from_source_are_allowed(conn):
+    cfg = __import__("recipebot.substitute", fromlist=["load_roles"]).load_roles(V1)
+    vocab = {"applesauce", "egg", "banana"}
+    ok = Draft(steps=["Bake 25 minutes at 350 F.", "Stir in 1/4 cup applesauce."])
+    assert validate(ok, ["1/4 cup applesauce"], ["egg"], ["Bake 25 minutes at 350 F.", "Mix."], "Banana Bread", vocab, cfg) == []  # numbers exist in source
+    bad = Draft(steps=["Bake 30 minutes."], notes=["a " * 40])
+    pr = validate(bad, ["applesauce"], ["egg"], ["Bake 25 minutes."], "Banana Bread", vocab, cfg)
+    assert any("number 30" in x for x in pr) and any("longer than 30 words" in x for x in pr)
+
+
+def test_llm_trouble_never_breaks_the_evidence(conn):
+    res, _ = pred(conn, "not json at all")
+    assert res["prediction_status"] == "llm_unavailable" and res["predictions"] == [] and res["status"] == "ok" and res["selected"] == "applesauce"
+
+
+def test_no_draft_without_an_applied_edit(conn):
+    llm, q = llm_for(GOOD)
+    res = attach_prediction(substitute("ar:zf0", "egg", conn=conn), llm, conn, V1)  # insufficient -> refused: nothing to revise
+    assert res["prediction_status"] == "skipped" and q.calls == 0 and res.get("predictions", []) == []
+
+
+def test_cli_draft_flag(conn):
+    out = handle("/sub ar:bb0 --replace egg --draft", {}, conn)  # no orchestrator/LLM: says so, still gives the evidence
+    assert "--draft needs the LLM" in out and "EVIDENCE GRADE: strong" in out and "PREDICTION" not in out
+    llm, _ = llm_for(GOOD)
+    o = Orchestrator(llm, conn, use_writer=False)
+    out = handle("/sub ar:bb0 --replace egg --draft", {}, conn, o)
+    assert "PREDICTION (LLM-drafted revised steps; validated by code; NOT dataset evidence)" in out and "Stir in the applesauce." in out and "caution: Without the egg" in out
+
+
+def test_orchestrator_runs_draft_and_verifies_prose(conn, monkeypatch):
+    monkeypatch.setattr("recipebot.substitute_draft.known_foods", lambda c, n: {"applesauce", "egg", "banana", "yogurt"})
+    plans = {"swap the eggs in ar:bb0": Plan(intent="substitute", tool_args=ToolArgs(target="egg", recipe_id="ar:bb0"))}
+    llm, q = llm_for(GOOD, plans=plans)
+    o = Orchestrator(llm, conn, use_writer=True)
+    r = o.turn("swap the eggs in ar:bb0")
+    assert "PREDICTION (LLM-drafted" in r.text and "Stir in the applesauce." in r.text and not r.fallback and q.calls == 1
+    assert "applesauce" in r.text and "--- RECEIPT ---" in r.text
+
+
+def test_orchestrator_user_picks_among_conflicting_options(conn):
+    plans = {"swap the cream in ar:pa0": Plan(intent="substitute", tool_args=ToolArgs(target="cream", recipe_id="ar:pa0")),
+             "use coconut milk": Plan(intent="substitute", tool_args=ToolArgs(use="coconut milk")),
+             "use unicorn tears": Plan(intent="substitute", tool_args=ToolArgs(use="unicorn tears"))}
+    llm, _ = llm_for(GOOD, plans=plans)
+    o = Orchestrator(llm, conn, use_writer=False)
+    r1 = o.turn("swap the cream in ar:pa0")
+    assert "EVIDENCE GRADE: conflicting" in r1.text and "--use" in r1.text and "UPDATED INGREDIENTS" not in r1.text
+    r2 = o.turn("use coconut milk")  # target + recipe remembered from the previous substitute turn
+    assert "RESULT: coconut milk" in r2.text and "UPDATED INGREDIENTS" in r2.text
+    assert "not a replacement supported by the dataset evidence" in o.turn("use unicorn tears").text
